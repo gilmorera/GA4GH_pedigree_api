@@ -1,0 +1,10 @@
+.pytest_cache
+coverage.xml
+htmlcov
+*.egg-info
+.idea
+*/_version.py
+__pycache__
+
+build
+dist

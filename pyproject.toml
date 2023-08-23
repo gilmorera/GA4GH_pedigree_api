@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my_pkg"
+authors = [
+  { name="Bradley Lowekamp", email="bioinformatics@niaid.nih.gov" },
+]
+description = "A template for python packages with best practices."
+readme = "README.rst"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies", "version"]
+
+[project.urls]
+homepage = "https://www.niaid.nih.gov/research/bioinformatics-computational-biosciences-branch"
+source = "https://github.com/niaid/rap_py_template"
+documentation = "https://cautious-umbrella-90d21757.pages.github.io/"
+
+[project.optional-dependencies]
+dev = [
+  "pytest"
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+junit_family = "xunit2"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.black]
+line-length =  120
+exclude = '(docs/conf\.py)|venv*'
+
+[tool.setuptools_scm]
+write_to = "my_pkg/_version.py"
+local_scheme = "dirty-tag"
+

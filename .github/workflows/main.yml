@@ -1,0 +1,116 @@
+name: Python Test and Package
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+    - uses: actions/cache@v3
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-v1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Linting with pre-commit
+      run: |
+        python -m pip install pre-commit
+        pre-commit run --show-diff-on-failure --color=always --all-files
+
+
+  test:
+    needs: linting
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.11]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Create LFS file list
+      run: |
+        git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+    - name: Restore LFS cache
+      uses: actions/cache@v3
+      id: lfs-cache
+      with:
+        path: .git/lfs
+        key: lfs-v1-${{ hashFiles('.lfs-assets-id') }}
+        restore-keys:
+          lfs-v1-
+    - name: Git LFS Pull
+      run: |
+        git lfs pull
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    - name: Install dependencies
+      run: |
+        python -m pip install -e .[dev]
+    - name: Test with pytest
+      run: |
+        python -m pytest
+    - name: Build package
+      run: |
+        python -m pip install twine build
+        python -m build --wheel --sdist
+        python -m twine check dist/*
+    - name: Upload package
+      if: github.event_name == 'push' && matrix.python-version == 3.11
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-packages
+        path: dist
+
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install twine
+      - uses: actions/download-artifact@v3
+        id: download
+        with:
+          name: python-packages
+
+      - name: Create Release and Upload
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} --repo  ${{ github.repository }} --verify-tag --generate-notes --title "Release ${{ github.ref_name }}"
+          gh release upload ${{ github.ref_name }} --repo  ${{ github.repository }} ${{ steps.download.outputs.download-path }}/my_pkg*
+
+      - name: bcbb-pypi upload
+        run: |
+          python -m twine check ${{steps.download.outputs.download-path}}/*
+          python -m twine upload ${{steps.download.outputs.download-path}}/*
+        env:
+          TWINE_REPOSITORY_URL: https://artifactory.niaid.nih.gov/artifactory/api/pypi/bcbb-pypi
+          TWINE_PASSWORD: ${{secrets.BCBB_PYPI_PASSWORD}}
+          TWINE_USERNAME: ${{secrets.BCBB_PYPI_USERNAME}}
